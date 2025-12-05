@@ -13,12 +13,8 @@ const PORT = process.env.PORT || 3000;
 const PAYFORT_SECRET_KEY = process.env.PAYFORT_SECRET_KEY;
 const PAYFORT_COMPANY_ID = process.env.PAYFORT_COMPANY_ID;
 
-// Valor da cota
 const VALOR_COTA = 4.99;
 
-// ==============================
-// ROTA PRINCIPAL DO CHECKOUT PIX
-// ==============================
 app.post("/api/pedido", async (req, res) => {
   try {
     const { nome, whatsapp, email, quantidadeCotas } = req.body;
@@ -33,14 +29,14 @@ app.post("/api/pedido", async (req, res) => {
 
     const valorTotal = Number((quantidadeCotas * VALOR_COTA).toFixed(2));
 
-    // Endpoint oficial PayFort (API Normal)
-    const url = "https://api.payfortbr.club/api/v1/charges";
+    // NOVA ROTA CORRETA
+    const url = "https://app.payfortbr.club/payment/checkout";
 
     const payload = {
       company_id: PAYFORT_COMPANY_ID,
       payment_method: "pix",
       amount: valorTotal,
-      description: `Compra de ${quantidadeCotas} cotas de rifa`,
+      description: `Compra de ${quantidadeCotas} cotas`,
       customer: {
         name: nome,
         email: email,
@@ -58,17 +54,15 @@ app.post("/api/pedido", async (req, res) => {
 
     if (!dados.pix) {
       return res.status(500).json({
-        erro: "A PayFort não retornou os dados PIX.",
+        erro: "A PayFort não retornou informações PIX.",
         respostaBruta: dados
       });
     }
 
-    const pix = dados.pix;
-
     return res.json({
-      pixQrCodeUrl: pix.qrcode_url,
-      pixQrCodeBase64: pix.qrcode_base64,
-      pixCodigo: pix.copia_cola,
+      pixQrCodeUrl: dados.pix.qrcode_url,
+      pixCodigo: dados.pix.copia_cola,
+      pixQrCodeBase64: dados.pix.qrcode_base64,
       transactionId: dados.id,
       valorTotal
     });
@@ -77,13 +71,12 @@ app.post("/api/pedido", async (req, res) => {
     console.log("ERRO PAYFORT:", err.response?.data || err.message);
 
     return res.status(500).json({
-      erro: "Erro ao gerar PIX na PayFort.",
+      erro: "Erro ao gerar PIX na PayFort",
       detalhe: err.response?.data || err.message
     });
   }
 });
 
-// Servidor ativo
 app.listen(PORT, () => {
   console.log("Servidor rodando na porta " + PORT);
 });
