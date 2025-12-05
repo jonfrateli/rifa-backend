@@ -13,8 +13,25 @@ const PORT = process.env.PORT || 3000;
 const PAYFORT_SECRET_KEY = process.env.PAYFORT_SECRET_KEY;
 const PAYFORT_COMPANY_ID = process.env.PAYFORT_COMPANY_ID;
 
+// Valor da cota
 const VALOR_COTA = 4.99;
 
+// ==============================
+// 🔥 Endpoint oficial PayFort
+// ==============================
+const PAYFORT_URL = "https://api.payfortbr.club/functions/v1/transactions";
+
+// ==============================
+// 🔐 AUTENTICAÇÃO BASIC AUTH
+// ==============================
+function gerarBasicAuth() {
+  const token = Buffer.from(`${PAYFORT_SECRET_KEY}:${PAYFORT_COMPANY_ID}`).toString("base64");
+  return `Basic ${token}`;
+}
+
+// ==============================
+// 🚀 Rota principal — Criar PIX
+// ==============================
 app.post("/api/pedido", async (req, res) => {
   try {
     const { nome, whatsapp, email, quantidadeCotas } = req.body;
@@ -29,12 +46,12 @@ app.post("/api/pedido", async (req, res) => {
 
     const valorTotal = Number((quantidadeCotas * VALOR_COTA).toFixed(2));
 
-    // NOVA ROTA CORRETA
-    const url = "https://app.payfortbr.club/api/v1/charges";
+    // ==============================
+    // 📦 Payload da transação PIX
+    // ==============================
 
     const payload = {
-      company_id: PAYFORT_COMPANY_ID,
-      payment_method: "pix",
+      type: "pix",
       amount: valorTotal,
       description: `Compra de ${quantidadeCotas} cotas`,
       customer: {
@@ -46,15 +63,22 @@ app.post("/api/pedido", async (req, res) => {
 
     const headers = {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${PAYFORT_SECRET_KEY}`
+      "Authorization": gerarBasicAuth()
     };
 
-    const response = await axios.post(url, payload, { headers });
+    // ==============================
+    // 🚀 Requisição PayFort
+    // ==============================
+    const response = await axios.post(PAYFORT_URL, payload, { headers });
+
     const dados = response.data;
+
+    // DEBUG — mostra retorno bruto caso precise
+    console.log("RETORNO PAYFORT:", JSON.stringify(dados, null, 2));
 
     if (!dados.pix) {
       return res.status(500).json({
-        erro: "A PayFort não retornou informações PIX.",
+        erro: "A PayFort não retornou dados PIX.",
         respostaBruta: dados
       });
     }
@@ -62,7 +86,7 @@ app.post("/api/pedido", async (req, res) => {
     return res.json({
       pixQrCodeUrl: dados.pix.qrcode_url,
       pixCodigo: dados.pix.copia_cola,
-      pixQrCodeBase64: dados.pix.qrcode_base64,
+      pixBase64: dados.pix.qrcode_base64,
       transactionId: dados.id,
       valorTotal
     });
@@ -71,12 +95,15 @@ app.post("/api/pedido", async (req, res) => {
     console.log("ERRO PAYFORT:", err.response?.data || err.message);
 
     return res.status(500).json({
-      erro: "Erro ao gerar PIX na PayFort",
+      erro: "Falha ao gerar PIX",
       detalhe: err.response?.data || err.message
     });
   }
 });
 
+// ==============================
+// 🌐 Servidor ativo
+// ==============================
 app.listen(PORT, () => {
   console.log("Servidor rodando na porta " + PORT);
 });
