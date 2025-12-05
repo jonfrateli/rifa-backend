@@ -30,7 +30,7 @@ app.post("/api/pedido", async (req, res) => {
     const valorTotal = Number((quantidadeCotas * VALOR_COTA).toFixed(2));
 
     // NOVA ROTA CORRETA
-    const url = "https://app.payfortbr.club/api/v1/payment/checkout";
+    const url = "https://app.payfortbr.club/api/v1/charges";
 
     const payload = {
       company_id: PAYFORT_COMPANY_ID,
