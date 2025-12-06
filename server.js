@@ -10,58 +10,86 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const PAYFORT_SECRET_KEY = process.env.PAYFORT_SECRET_KEY;
-const PAYFORT_COMPANY_ID = process.env.PAYFORT_COMPANY_ID;
 
-const VALOR_COTA = 4.99;
-
+// =========================
+//   ROTAS
+// =========================
 app.post("/api/pedido", async (req, res) => {
   try {
     const { nome, whatsapp, email, quantidadeCotas } = req.body;
 
-    if (!nome || !whatsapp || !email || !quantidadeCotas)
+    if (!nome || !whatsapp || !email || !quantidadeCotas) {
       return res.status(400).json({ erro: "Dados incompletos." });
+    }
 
-    if (quantidadeCotas < 4)
+    if (quantidadeCotas < 4) {
       return res.status(400).json({ erro: "Quantidade mínima é 4 cotas." });
+    }
 
-    const valorTotal = Number((quantidadeCotas * VALOR_COTA).toFixed(2));
+    const valor = Number((quantidadeCotas * 4.99).toFixed(2));
 
-    // 🔥 Endpoint certo da documentação
-    const url = "https://api.payfortbr.club/functions/v1/transactions";
+    // ============================
+    //    AUTENTICAÇÃO BASIC
+    // ============================
+    const SECRET = process.env.PAYFORT_SECRET_KEY;
+    const COMPANY = process.env.PAYFORT_COMPANY_ID;
 
-    const payload = {
-      amount: valorTotal,
-      type: "pix",
-      description: `Compra de ${quantidadeCotas} cotas`
-    };
+    const basicAuth = Buffer.from(`${SECRET}:${COMPANY}`).toString("base64");
 
-    // 🔥 Autenticação Basic CERTA
-    const cred = Buffer.from(
-      `${PAYFORT_SECRET_KEY}:${PAYFORT_COMPANY_ID}`
-    ).toString("base64");
+    // ============================
+    //    REQUISIÇÃO CORRETA
+    // ============================
+    const response = await axios.post(
+      "https://api.payfortbr.club/functions/v1/transactions",
+      {
+        amount: valor,
+        paymentMethod: "pix",
+        installments: 1,
+        customer: {
+          name: nome,
+          email: email,
+          phone: whatsapp,
+          document: { number: "33376407614", type: "CPF" }, // coloque CPF do cliente se quiser
+          address: {
+            street: "Rua X",
+            streetNumber: "1",
+            zipCode: "11050100",
+            neighborhood: "Centro",
+            city: "Santos",
+            state: "SP",
+            country: "BR"
+          }
+        }
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Basic ${basicAuth}`
+        }
+      }
+    );
 
-    const headers = {
-      "Authorization": `Basic ${cred}`,
-      "Content-Type": "application/json"
-    };
+    const dados = response.data;
 
-    const response = await axios.post(url, payload, { headers });
+    if (!dados.pix) {
+      console.log("ERRO PAYFORT:", dados);
+      return res.status(500).json({ erro: "Erro ao gerar PIX.", detalhe: dados });
+    }
 
-    console.log("PAYFORT RESPONSE:", response.data);
-
-    return res.json(response.data);
+    return res.json({
+      pixQrCodeUrl: dados.pix.qrcode_url,
+      pixCodigo: dados.pix.copia_cola,
+      transactionId: dados.id,
+      valorTotal: valor
+    });
 
   } catch (err) {
     console.log("ERRO PAYFORT:", err.response?.data || err.message);
-
-    return res.status(500).json({
-      erro: "Erro ao gerar PIX na PayFort.",
-      detalhe: err.response?.data || err.message
-    });
+    return res.status(500).json({ erro: "Erro ao gerar PIX." });
   }
 });
 
+// ============================
 app.listen(PORT, () => {
   console.log("Servidor rodando na porta " + PORT);
 });
